@@ -175,11 +175,14 @@ export function ThreadActionsView({
         type: "approve",
       }));
 
+      // Key the resume by interrupt id; required when multiple interrupts are pending.
       stream.submit(
         {},
         {
           command: {
-            resume: { decisions: allDecisions },
+            resume: interrupt.id
+              ? { [interrupt.id]: { decisions: allDecisions } }
+              : { decisions: allDecisions },
           },
         },
       );
@@ -197,7 +200,7 @@ export function ThreadActionsView({
         duration: 5000,
       });
     }
-  }, [actionRequests, hasMultipleActions, stream]);
+  }, [actionRequests, hasMultipleActions, interrupt.id, stream]);
 
   const handleSubmitAll = useCallback(() => {
     if (!hasMultipleActions) return;
@@ -222,11 +225,14 @@ export function ThreadActionsView({
         return decision;
       });
 
+      // Key the resume by interrupt id; required when multiple interrupts are pending.
       stream.submit(
         {},
         {
           command: {
-            resume: { decisions: allDecisions },
+            resume: interrupt.id
+              ? { [interrupt.id]: { decisions: allDecisions } }
+              : { decisions: allDecisions },
           },
         },
       );
@@ -247,7 +253,13 @@ export function ThreadActionsView({
     } finally {
       setSubmittingAll(false);
     }
-  }, [actionRequests, addressedActions, hasMultipleActions, stream]);
+  }, [
+    actionRequests,
+    addressedActions,
+    hasMultipleActions,
+    interrupt.id,
+    stream,
+  ]);
 
   const allAllowApprove = useMemo(() => {
     if (!hasMultipleActions) return false;

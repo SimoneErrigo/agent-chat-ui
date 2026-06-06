@@ -86,13 +86,14 @@ export default function useInterruptedActions({
 
   const resumeRun = (decisions: Decision[]): boolean => {
     try {
+      // Key the resume by interrupt id; required when multiple interrupts are pending.
       thread.submit(
         {},
         {
           command: {
-            resume: {
-              decisions,
-            },
+            resume: interrupt.id
+              ? { [interrupt.id]: { decisions } }
+              : { decisions },
           },
         },
       );
