@@ -11,6 +11,7 @@ import { ToolCalls, ToolResult } from "./tool-calls";
 import { MessageContentComplex } from "@langchain/core/messages";
 import { Fragment } from "react/jsx-runtime";
 import { isAgentInboxInterruptSchema } from "@/lib/agent-inbox-interrupt";
+import { useIsInterruptResolved } from "@/lib/resolved-interrupts";
 import { ThreadView } from "../agent-inbox";
 import { useQueryState, parseAsBoolean } from "nuqs";
 import { GenericInterruptView } from "./generic-interrupt";
@@ -83,6 +84,16 @@ function Interrupt({
     ? (interrupt as Record<string, any>[])
     : (((interrupt as { value?: unknown } | undefined)?.value ??
         interrupt) as Record<string, any>);
+
+  // Once the operator has answered this interrupt, hide it immediately rather
+  // than waiting for thread.interrupt to clear (which lags while another agent
+  // is still streaming, making the resolved box linger / reappear on remount).
+  const interruptId =
+    interrupt && !Array.isArray(interrupt)
+      ? ((interrupt as { id?: string }).id ?? undefined)
+      : undefined;
+  const resolved = useIsInterruptResolved(interruptId);
+  if (resolved) return null;
 
   return (
     <>

@@ -10,6 +10,7 @@ import { useQueryState } from "nuqs";
 import { constructOpenInStudioURL, buildDecisionFromState } from "../utils";
 import { Decision, HITLRequest, DecisionType, ActionRequest } from "../types";
 import { useStreamContext } from "@/providers/Stream";
+import { markInterruptResolved } from "@/lib/resolved-interrupts";
 
 interface ThreadActionsViewProps {
   interrupt: Interrupt<HITLRequest>;
@@ -236,6 +237,8 @@ export function ThreadActionsView({
           },
         },
       );
+
+      markInterruptResolved(interrupt.id);
 
       toast("Success", {
         description: "All actions submitted successfully.",
