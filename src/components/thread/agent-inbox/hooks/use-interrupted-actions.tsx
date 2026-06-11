@@ -91,17 +91,14 @@ export default function useInterruptedActions({
   const resumeRun = (decisions: Decision[]): boolean => {
     try {
       // Key the resume by interrupt id; required when multiple interrupts are pending.
-      thread.submit(
-        null,
-        {
-          multitaskStrategy: "interrupt",
-          command: {
-            resume: interrupt.id
-              ? { [interrupt.id]: { decisions } }
-              : { decisions },
-          },
+      thread.submit(null, {
+        multitaskStrategy: "interrupt",
+        command: {
+          resume: interrupt.id
+            ? { [interrupt.id]: { decisions } }
+            : { decisions },
         },
-      );
+      });
       return true;
     } catch (error) {
       console.error("Error sending human response", error);

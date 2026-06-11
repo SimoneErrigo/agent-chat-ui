@@ -180,17 +180,14 @@ export function ThreadActionsView({
       }));
 
       // Key the resume by interrupt id; required when multiple interrupts are pending.
-      stream.submit(
-        null,
-        {
-          multitaskStrategy: "interrupt",
-          command: {
-            resume: interrupt.id
-              ? { [interrupt.id]: { decisions: allDecisions } }
-              : { decisions: allDecisions },
-          },
+      stream.submit(null, {
+        multitaskStrategy: "interrupt",
+        command: {
+          resume: interrupt.id
+            ? { [interrupt.id]: { decisions: allDecisions } }
+            : { decisions: allDecisions },
         },
-      );
+      });
 
       // Hide this HITL box immediately: with other agents still streaming,
       // thread.interrupt clears late and the answered box would linger.
@@ -235,17 +232,14 @@ export function ThreadActionsView({
       });
 
       // Key the resume by interrupt id; required when multiple interrupts are pending.
-      stream.submit(
-        null,
-        {
-          multitaskStrategy: "interrupt",
-          command: {
-            resume: interrupt.id
-              ? { [interrupt.id]: { decisions: allDecisions } }
-              : { decisions: allDecisions },
-          },
+      stream.submit(null, {
+        multitaskStrategy: "interrupt",
+        command: {
+          resume: interrupt.id
+            ? { [interrupt.id]: { decisions: allDecisions } }
+            : { decisions: allDecisions },
         },
-      );
+      });
 
       markInterruptResolved(getInterruptKeys(interrupt));
 
