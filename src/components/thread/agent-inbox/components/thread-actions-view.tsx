@@ -263,13 +263,7 @@ export function ThreadActionsView({
     } finally {
       setSubmittingAll(false);
     }
-  }, [
-    actionRequests,
-    addressedActions,
-    hasMultipleActions,
-    interrupt,
-    stream,
-  ]);
+  }, [actionRequests, addressedActions, hasMultipleActions, interrupt, stream]);
 
   const allAllowApprove = useMemo(() => {
     if (!hasMultipleActions) return false;

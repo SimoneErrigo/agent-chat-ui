@@ -39,10 +39,7 @@ function stableStringify(value: unknown): string {
  * still works when the backend doesn't send interrupt ids.
  */
 export function getInterruptKey(
-  interrupt:
-    | { id?: string | null; value?: unknown }
-    | null
-    | undefined,
+  interrupt: { id?: string | null; value?: unknown } | null | undefined,
 ): string | null {
   if (!interrupt) return null;
   if (interrupt.id) return interrupt.id;
