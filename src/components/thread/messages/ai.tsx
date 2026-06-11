@@ -13,7 +13,7 @@ import { MessageContentComplex } from "@langchain/core/messages";
 import { Fragment } from "react/jsx-runtime";
 import { isAgentInboxInterruptSchema } from "@/lib/agent-inbox-interrupt";
 import {
-  getInterruptKey,
+  getInterruptKeys,
   isInterruptResolved,
   useResolvedInterruptsVersion,
 } from "@/lib/resolved-interrupts";
@@ -135,7 +135,7 @@ function Interrupt({
   const pending: Record<string, any>[] = [];
   const awaitingBackend: Record<string, any>[] = [];
   for (const it of interruptList) {
-    if (isInterruptResolved(getInterruptKey(it))) {
+    if (isInterruptResolved(getInterruptKeys(it))) {
       awaitingBackend.push(it);
     } else {
       pending.push(it);

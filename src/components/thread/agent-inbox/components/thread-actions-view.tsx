@@ -11,7 +11,7 @@ import { constructOpenInStudioURL, buildDecisionFromState } from "../utils";
 import { Decision, HITLRequest, DecisionType, ActionRequest } from "../types";
 import { useStreamContext } from "@/providers/Stream";
 import {
-  getInterruptKey,
+  getInterruptKeys,
   markInterruptResolved,
 } from "@/lib/resolved-interrupts";
 
@@ -181,8 +181,9 @@ export function ThreadActionsView({
 
       // Key the resume by interrupt id; required when multiple interrupts are pending.
       stream.submit(
-        {},
+        null,
         {
+          multitaskStrategy: "interrupt",
           command: {
             resume: interrupt.id
               ? { [interrupt.id]: { decisions: allDecisions } }
@@ -193,7 +194,7 @@ export function ThreadActionsView({
 
       // Hide this HITL box immediately: with other agents still streaming,
       // thread.interrupt clears late and the answered box would linger.
-      markInterruptResolved(getInterruptKey(interrupt));
+      markInterruptResolved(getInterruptKeys(interrupt));
 
       toast("Success", {
         description: "All actions approved successfully.",
@@ -235,8 +236,9 @@ export function ThreadActionsView({
 
       // Key the resume by interrupt id; required when multiple interrupts are pending.
       stream.submit(
-        {},
+        null,
         {
+          multitaskStrategy: "interrupt",
           command: {
             resume: interrupt.id
               ? { [interrupt.id]: { decisions: allDecisions } }
@@ -245,7 +247,7 @@ export function ThreadActionsView({
         },
       );
 
-      markInterruptResolved(getInterruptKey(interrupt));
+      markInterruptResolved(getInterruptKeys(interrupt));
 
       toast("Success", {
         description: "All actions submitted successfully.",

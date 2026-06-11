@@ -33,21 +33,62 @@ function stableStringify(value: unknown): string {
   return `{${entries.join(",")}}`;
 }
 
+function getHitlFingerprint(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const hitlValue = value as {
+    action_requests?: unknown[];
+    review_configs?: unknown[];
+  };
+  if (!Array.isArray(hitlValue.action_requests)) return null;
+  if (!Array.isArray(hitlValue.review_configs)) return null;
+
+  const normalized = {
+    action_requests: hitlValue.action_requests.map((request) => {
+      const item = request as { name?: unknown; args?: unknown };
+      return { name: item?.name, args: item?.args };
+    }),
+    review_configs: hitlValue.review_configs.map((config) => {
+      const item = config as {
+        action_name?: unknown;
+        allowed_decisions?: unknown;
+      };
+      return {
+        action_name: item?.action_name,
+        allowed_decisions: item?.allowed_decisions,
+      };
+    }),
+  };
+  return `hitl:${stableStringify(normalized)}`;
+}
+
 /**
- * Stable key for an interrupt. Prefers `interrupt.id` (present on recent
- * LangGraph backends); falls back to a content-derived key so suppression
- * still works when the backend doesn't send interrupt ids.
+ * Stable keys for an interrupt. Prefer `interrupt.id` (present on recent
+ * LangGraph backends), but also keep a HITL-specific fingerprint that ignores
+ * descriptions and schemas. Those fields can be regenerated while sibling
+ * agents keep streaming, which otherwise makes an already-approved interrupt
+ * look "new" and reappear.
  */
+export function getInterruptKeys(
+  interrupt: { id?: string | null; value?: unknown } | null | undefined,
+): string[] {
+  if (!interrupt) return [];
+  const keys: string[] = [];
+  if (interrupt.id) keys.push(interrupt.id);
+  try {
+    const hitlFingerprint = getHitlFingerprint(interrupt.value);
+    if (hitlFingerprint) keys.push(hitlFingerprint);
+    keys.push(`value:${stableStringify(interrupt.value)}`);
+  } catch {
+    // Fall through with any keys collected so far.
+  }
+  return [...new Set(keys)];
+}
+
+/** Back-compatible single key for callers that do not need all aliases. */
 export function getInterruptKey(
   interrupt: { id?: string | null; value?: unknown } | null | undefined,
 ): string | null {
-  if (!interrupt) return null;
-  if (interrupt.id) return interrupt.id;
-  try {
-    return `value:${stableStringify(interrupt.value)}`;
-  } catch {
-    return null;
-  }
+  return getInterruptKeys(interrupt)[0] ?? null;
 }
 
 // Bumped on every change so subscribers re-render even when the value they
@@ -61,14 +102,24 @@ function emit() {
   for (const listener of listeners) listener();
 }
 
-export function markInterruptResolved(id: string | undefined | null): void {
-  if (!id || resolvedIds.has(id)) return;
-  resolvedIds.add(id);
-  emit();
+export function markInterruptResolved(
+  id: string | string[] | undefined | null,
+): void {
+  const ids = Array.isArray(id) ? id : [id];
+  let changed = false;
+  for (const item of ids) {
+    if (!item || resolvedIds.has(item)) continue;
+    resolvedIds.add(item);
+    changed = true;
+  }
+  if (changed) emit();
 }
 
-export function isInterruptResolved(id: string | undefined | null): boolean {
-  return !!id && resolvedIds.has(id);
+export function isInterruptResolved(
+  id: string | string[] | undefined | null,
+): boolean {
+  const ids = Array.isArray(id) ? id : [id];
+  return ids.some((item) => !!item && resolvedIds.has(item));
 }
 
 /** Forget all answered ids (e.g. when switching to a different thread). */

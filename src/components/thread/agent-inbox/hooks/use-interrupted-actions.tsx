@@ -14,7 +14,7 @@ import {
 import { Decision, DecisionWithEdits, HITLRequest, SubmitType } from "../types";
 import { buildDecisionFromState, createDefaultHumanResponse } from "../utils";
 import {
-  getInterruptKey,
+  getInterruptKeys,
   markInterruptResolved,
 } from "@/lib/resolved-interrupts";
 
@@ -92,8 +92,9 @@ export default function useInterruptedActions({
     try {
       // Key the resume by interrupt id; required when multiple interrupts are pending.
       thread.submit(
-        {},
+        null,
         {
+          multitaskStrategy: "interrupt",
           command: {
             resume: interrupt.id
               ? { [interrupt.id]: { decisions } }
@@ -152,7 +153,7 @@ export default function useInterruptedActions({
 
       // Hide this HITL box now: thread.interrupt clears late while other agents
       // keep streaming, so without this the answered box lingers/reappears.
-      markInterruptResolved(getInterruptKey(interrupt));
+      markInterruptResolved(getInterruptKeys(interrupt));
 
       toast("Success", {
         description: "Response submitted successfully.",
@@ -206,7 +207,7 @@ export default function useInterruptedActions({
         },
       );
 
-      markInterruptResolved(getInterruptKey(interrupt));
+      markInterruptResolved(getInterruptKeys(interrupt));
 
       toast("Success", {
         description: "Marked thread as resolved.",
