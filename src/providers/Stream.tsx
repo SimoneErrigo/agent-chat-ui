@@ -23,6 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { ArrowRight } from "lucide-react";
 import { PasswordInput } from "@/components/ui/password-input";
 import { getApiKey } from "@/lib/api-key";
+import { clearResolvedInterrupts } from "@/lib/resolved-interrupts";
 import { useThreads } from "./Thread";
 import { toast } from "sonner";
 
@@ -83,6 +84,14 @@ const StreamSession = ({
 }) => {
   const [threadId, setThreadId] = useQueryState("threadId");
   const { getThreads, setThreads } = useThreads();
+
+  // Forget locally-suppressed interrupts when switching threads, so an
+  // interrupt that becomes pending again (e.g. branch switch / regenerate)
+  // is not hidden by a stale "already answered" flag.
+  useEffect(() => {
+    clearResolvedInterrupts();
+  }, [threadId]);
+
   const streamValue = useTypedStream({
     apiUrl,
     apiKey: apiKey ?? undefined,

@@ -7,11 +7,13 @@ import { BranchSwitcher, CommandBar } from "./shared";
 import { MarkdownText } from "../markdown-text";
 import { LoadExternalComponent } from "@langchain/langgraph-sdk/react-ui";
 import { cn } from "@/lib/utils";
+import { LoaderCircle } from "lucide-react";
 import { ToolCalls, ToolResult } from "./tool-calls";
 import { MessageContentComplex } from "@langchain/core/messages";
 import { Fragment } from "react/jsx-runtime";
 import { isAgentInboxInterruptSchema } from "@/lib/agent-inbox-interrupt";
 import {
+  getInterruptKey,
   isInterruptResolved,
   useResolvedInterruptsVersion,
 } from "@/lib/resolved-interrupts";
@@ -78,13 +80,40 @@ interface InterruptProps {
   hasNoAIOrToolMessages: boolean;
 }
 
+/**
+ * Compact placeholder for interrupts the operator already answered but the
+ * backend hasn't consumed yet: the resumed branch keeps streaming until its
+ * next checkpoint, so thread.interrupt clears late. Shows the decision is in
+ * flight instead of hiding the box abruptly; disappears on its own once
+ * thread.interrupt advances past the answered interrupt.
+ */
+function AwaitingResumeNotice({
+  interrupts,
+}: {
+  interrupts: Record<string, any>[];
+}) {
+  const names = interrupts
+    .map((it) => it?.value?.action_requests?.[0]?.name)
+    .filter((n): n is string => typeof n === "string");
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+      <LoaderCircle className="size-4 shrink-0 animate-spin" />
+      <span>
+        Decision submitted
+        {names.length > 0 ? ` (${names.join(", ")})` : ""} — waiting for the
+        agent to resume…
+      </span>
+    </div>
+  );
+}
+
 function Interrupt({
   interrupt,
   isLastMessage,
   hasNoAIOrToolMessages,
 }: InterruptProps) {
-  // Re-render whenever the answered-interrupt set changes so resolved boxes
-  // disappear immediately, even in the multi-interrupt case (see below) where
+  // Re-render whenever the answered-interrupt set changes so answered boxes
+  // collapse immediately, even in the multi-interrupt case (see below) where
   // there is no single id to watch.
   useResolvedInterruptsVersion();
 
@@ -96,25 +125,46 @@ function Interrupt({
       ? [interrupt as Record<string, any>]
       : [];
 
-  // Drop the interrupts the operator already answered this session. Without
-  // this the answered box lingers until thread.interrupt advances (which lags
-  // while other agents keep streaming); and with multiple pending interrupts,
-  // filtering here surfaces the next unanswered one immediately from local
-  // state instead of waiting for the next worker's request to refresh the SDK.
-  const pending = interruptList.filter((it) => !isInterruptResolved(it?.id));
-
-  if (interruptList.length > 0 && pending.length === 0) return null;
-  if (!(isLastMessage || hasNoAIOrToolMessages)) return null;
-
-  if (isAgentInboxInterruptSchema(pending)) {
-    return <ThreadView interrupt={pending} />;
+  // Split the interrupts the operator already answered this session from the
+  // ones still awaiting a decision. Without this the answered box lingers
+  // interactively until thread.interrupt advances (which lags while other
+  // agents keep streaming); and with multiple pending interrupts, splitting
+  // here surfaces the next unanswered one immediately from local state instead
+  // of waiting for the next worker's request to refresh the SDK. Answered ones
+  // still reported by the backend render as a compact "in flight" notice.
+  const pending: Record<string, any>[] = [];
+  const awaitingBackend: Record<string, any>[] = [];
+  for (const it of interruptList) {
+    if (isInterruptResolved(getInterruptKey(it))) {
+      awaitingBackend.push(it);
+    } else {
+      pending.push(it);
+    }
   }
 
-  const first = pending[0];
-  if (!first) return null;
-  const fallbackValue = ((first as { value?: unknown }).value ??
-    first) as Record<string, any>;
-  return <GenericInterruptView interrupt={fallbackValue} />;
+  if (!(isLastMessage || hasNoAIOrToolMessages)) return null;
+  if (interruptList.length === 0) return null;
+
+  let pendingView: React.ReactNode = null;
+  if (pending.length > 0) {
+    if (isAgentInboxInterruptSchema(pending)) {
+      pendingView = <ThreadView interrupt={pending} />;
+    } else {
+      const first = pending[0];
+      const fallbackValue = ((first as { value?: unknown }).value ??
+        first) as Record<string, any>;
+      pendingView = <GenericInterruptView interrupt={fallbackValue} />;
+    }
+  }
+
+  return (
+    <>
+      {pendingView}
+      {awaitingBackend.length > 0 && (
+        <AwaitingResumeNotice interrupts={awaitingBackend} />
+      )}
+    </>
+  );
 }
 
 export function AssistantMessage({

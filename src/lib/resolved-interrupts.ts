@@ -19,6 +19,40 @@ import { useSyncExternalStore } from "react";
 const resolvedIds = new Set<string>();
 const listeners = new Set<() => void>();
 
+/** JSON.stringify with sorted object keys, so the same payload always yields the same string. */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  const entries = Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`);
+  return `{${entries.join(",")}}`;
+}
+
+/**
+ * Stable key for an interrupt. Prefers `interrupt.id` (present on recent
+ * LangGraph backends); falls back to a content-derived key so suppression
+ * still works when the backend doesn't send interrupt ids.
+ */
+export function getInterruptKey(
+  interrupt:
+    | { id?: string | null; value?: unknown }
+    | null
+    | undefined,
+): string | null {
+  if (!interrupt) return null;
+  if (interrupt.id) return interrupt.id;
+  try {
+    return `value:${stableStringify(interrupt.value)}`;
+  } catch {
+    return null;
+  }
+}
+
 // Bumped on every change so subscribers re-render even when the value they
 // derive (e.g. "are ALL of these interrupts resolved?") can't be expressed as a
 // single cached snapshot. Needed for the multi-interrupt case where

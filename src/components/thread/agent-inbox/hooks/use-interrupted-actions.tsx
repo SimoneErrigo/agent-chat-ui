@@ -13,7 +13,10 @@ import {
 } from "react";
 import { Decision, DecisionWithEdits, HITLRequest, SubmitType } from "../types";
 import { buildDecisionFromState, createDefaultHumanResponse } from "../utils";
-import { markInterruptResolved } from "@/lib/resolved-interrupts";
+import {
+  getInterruptKey,
+  markInterruptResolved,
+} from "@/lib/resolved-interrupts";
 
 interface UseInterruptedActionsInput {
   interrupt: Interrupt<HITLRequest>;
@@ -149,7 +152,7 @@ export default function useInterruptedActions({
 
       // Hide this HITL box now: thread.interrupt clears late while other agents
       // keep streaming, so without this the answered box lingers/reappears.
-      markInterruptResolved(interrupt.id);
+      markInterruptResolved(getInterruptKey(interrupt));
 
       toast("Success", {
         description: "Response submitted successfully.",
@@ -203,7 +206,7 @@ export default function useInterruptedActions({
         },
       );
 
-      markInterruptResolved(interrupt.id);
+      markInterruptResolved(getInterruptKey(interrupt));
 
       toast("Success", {
         description: "Marked thread as resolved.",

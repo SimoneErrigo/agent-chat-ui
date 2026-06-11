@@ -10,7 +10,10 @@ import { useQueryState } from "nuqs";
 import { constructOpenInStudioURL, buildDecisionFromState } from "../utils";
 import { Decision, HITLRequest, DecisionType, ActionRequest } from "../types";
 import { useStreamContext } from "@/providers/Stream";
-import { markInterruptResolved } from "@/lib/resolved-interrupts";
+import {
+  getInterruptKey,
+  markInterruptResolved,
+} from "@/lib/resolved-interrupts";
 
 interface ThreadActionsViewProps {
   interrupt: Interrupt<HITLRequest>;
@@ -188,6 +191,10 @@ export function ThreadActionsView({
         },
       );
 
+      // Hide this HITL box immediately: with other agents still streaming,
+      // thread.interrupt clears late and the answered box would linger.
+      markInterruptResolved(getInterruptKey(interrupt));
+
       toast("Success", {
         description: "All actions approved successfully.",
         duration: 5000,
@@ -201,7 +208,7 @@ export function ThreadActionsView({
         duration: 5000,
       });
     }
-  }, [actionRequests, hasMultipleActions, interrupt.id, stream]);
+  }, [actionRequests, hasMultipleActions, interrupt, stream]);
 
   const handleSubmitAll = useCallback(() => {
     if (!hasMultipleActions) return;
@@ -238,7 +245,7 @@ export function ThreadActionsView({
         },
       );
 
-      markInterruptResolved(interrupt.id);
+      markInterruptResolved(getInterruptKey(interrupt));
 
       toast("Success", {
         description: "All actions submitted successfully.",
@@ -260,7 +267,7 @@ export function ThreadActionsView({
     actionRequests,
     addressedActions,
     hasMultipleActions,
-    interrupt.id,
+    interrupt,
     stream,
   ]);
 
