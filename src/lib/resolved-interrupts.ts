@@ -19,7 +19,14 @@ import { useSyncExternalStore } from "react";
 const resolvedIds = new Set<string>();
 const listeners = new Set<() => void>();
 
+// Bumped on every change so subscribers re-render even when the value they
+// derive (e.g. "are ALL of these interrupts resolved?") can't be expressed as a
+// single cached snapshot. Needed for the multi-interrupt case where
+// thread.interrupt is an array and there is no single id to watch.
+let version = 0;
+
 function emit() {
+  version += 1;
   for (const listener of listeners) listener();
 }
 
@@ -47,10 +54,16 @@ function subscribe(callback: () => void): () => void {
   };
 }
 
-export function useIsInterruptResolved(id: string | undefined | null): boolean {
+/**
+ * Subscribe a component to changes in the resolved-interrupt set. Returns a
+ * version counter that changes on every mutation, so callers can re-derive
+ * "which of these interrupts are still pending?" during render via
+ * {@link isInterruptResolved} and always re-render when the set changes.
+ */
+export function useResolvedInterruptsVersion(): number {
   return useSyncExternalStore(
     subscribe,
-    () => isInterruptResolved(id),
-    () => isInterruptResolved(id),
+    () => version,
+    () => version,
   );
 }

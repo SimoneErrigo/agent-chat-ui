@@ -11,7 +11,10 @@ import { ToolCalls, ToolResult } from "./tool-calls";
 import { MessageContentComplex } from "@langchain/core/messages";
 import { Fragment } from "react/jsx-runtime";
 import { isAgentInboxInterruptSchema } from "@/lib/agent-inbox-interrupt";
-import { useIsInterruptResolved } from "@/lib/resolved-interrupts";
+import {
+  isInterruptResolved,
+  useResolvedInterruptsVersion,
+} from "@/lib/resolved-interrupts";
 import { ThreadView } from "../agent-inbox";
 import { useQueryState, parseAsBoolean } from "nuqs";
 import { GenericInterruptView } from "./generic-interrupt";
@@ -80,34 +83,38 @@ function Interrupt({
   isLastMessage,
   hasNoAIOrToolMessages,
 }: InterruptProps) {
-  const fallbackValue = Array.isArray(interrupt)
+  // Re-render whenever the answered-interrupt set changes so resolved boxes
+  // disappear immediately, even in the multi-interrupt case (see below) where
+  // there is no single id to watch.
+  useResolvedInterruptsVersion();
+
+  // thread.interrupt is a single Interrupt when one is pending, but an ARRAY
+  // when several sub-agents interrupt at once. Normalize to a list either way.
+  const interruptList: Record<string, any>[] = Array.isArray(interrupt)
     ? (interrupt as Record<string, any>[])
-    : (((interrupt as { value?: unknown } | undefined)?.value ??
-        interrupt) as Record<string, any>);
+    : interrupt
+      ? [interrupt as Record<string, any>]
+      : [];
 
-  // Once the operator has answered this interrupt, hide it immediately rather
-  // than waiting for thread.interrupt to clear (which lags while another agent
-  // is still streaming, making the resolved box linger / reappear on remount).
-  const interruptId =
-    interrupt && !Array.isArray(interrupt)
-      ? ((interrupt as { id?: string }).id ?? undefined)
-      : undefined;
-  const resolved = useIsInterruptResolved(interruptId);
-  if (resolved) return null;
+  // Drop the interrupts the operator already answered this session. Without
+  // this the answered box lingers until thread.interrupt advances (which lags
+  // while other agents keep streaming); and with multiple pending interrupts,
+  // filtering here surfaces the next unanswered one immediately from local
+  // state instead of waiting for the next worker's request to refresh the SDK.
+  const pending = interruptList.filter((it) => !isInterruptResolved(it?.id));
 
-  return (
-    <>
-      {isAgentInboxInterruptSchema(interrupt) &&
-        (isLastMessage || hasNoAIOrToolMessages) && (
-          <ThreadView interrupt={interrupt} />
-        )}
-      {interrupt &&
-      !isAgentInboxInterruptSchema(interrupt) &&
-      (isLastMessage || hasNoAIOrToolMessages) ? (
-        <GenericInterruptView interrupt={fallbackValue} />
-      ) : null}
-    </>
-  );
+  if (interruptList.length > 0 && pending.length === 0) return null;
+  if (!(isLastMessage || hasNoAIOrToolMessages)) return null;
+
+  if (isAgentInboxInterruptSchema(pending)) {
+    return <ThreadView interrupt={pending} />;
+  }
+
+  const first = pending[0];
+  if (!first) return null;
+  const fallbackValue = ((first as { value?: unknown }).value ??
+    first) as Record<string, any>;
+  return <GenericInterruptView interrupt={fallbackValue} />;
 }
 
 export function AssistantMessage({
