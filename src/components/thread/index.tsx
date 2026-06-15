@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import { ReactNode, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { clearResolvedInterrupts } from "@/lib/resolved-interrupts";
 import { useStreamContext } from "@/providers/Stream";
 import { useState, FormEvent } from "react";
 import { Button } from "../ui/button";
@@ -159,8 +160,14 @@ export function Thread() {
     }
     try {
       const message = (stream.error as any).message;
-      if (!message || lastError.current === message) {
-        // Message has already been logged. do not modify ref, return early.
+      // A page reload / navigation cancels the in-flight stream, but the run keeps
+      // going on the server and the UI reconnects (fetchStateHistory). Don't surface
+      // that benign cancellation as a scary error toast.
+      const benignCancel =
+        typeof message === "string" &&
+        /user interrupted the run|cancellederror|userinterrupt/i.test(message);
+      if (!message || benignCancel || lastError.current === message) {
+        // Already logged or benign cancellation. Return early.
         return;
       }
 
@@ -199,6 +206,13 @@ export function Thread() {
     if ((input.trim().length === 0 && contentBlocks.length === 0) || isLoading)
       return;
     setFirstTokenReceived(false);
+
+    // New turn: forget interrupts answered in earlier turns so an identical
+    // action this turn (e.g. start_exploit on the same exploit) is not wrongly
+    // suppressed. Answering an interrupt is a resume (no new human message), so
+    // it does NOT reach here — keeping an already-answered interrupt suppressed
+    // while later HITLs of the SAME run are still pending.
+    clearResolvedInterrupts();
 
     const newHumanMessage: Message = {
       id: uuidv4(),
@@ -239,6 +253,8 @@ export function Thread() {
   const handleRegenerate = (
     parentCheckpoint: Checkpoint | null | undefined,
   ) => {
+    // Fresh run from a checkpoint: same turn-boundary reset as handleSubmit.
+    clearResolvedInterrupts();
     // Do this so the loading state is correct
     prevMessageLength.current = prevMessageLength.current - 1;
     setFirstTokenReceived(false);

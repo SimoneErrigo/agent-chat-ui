@@ -19,6 +19,25 @@ import { useSyncExternalStore } from "react";
 const resolvedIds = new Set<string>();
 const listeners = new Set<() => void>();
 
+// Resume decisions answered during the CURRENT interrupt episode, keyed by
+// interrupt id. With several parallel interrupts pending, resuming with ONLY the
+// just-answered one makes the backend re-fire the others from the shared
+// checkpoint, so an already-accepted HITL box reappears as approvable. Sending
+// the FULL accumulated map on every resume keeps every answered interrupt
+// resolved. Cleared together with resolvedIds at the turn boundary.
+const answeredResumeDecisions = new Map<string, unknown>();
+
+export function recordResumeDecision(
+  id: string | null | undefined,
+  payload: unknown,
+): void {
+  if (id) answeredResumeDecisions.set(id, payload);
+}
+
+export function getAllResumeDecisions(): Record<string, unknown> {
+  return Object.fromEntries(answeredResumeDecisions);
+}
+
 /** JSON.stringify with sorted object keys, so the same payload always yields the same string. */
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") {
@@ -112,7 +131,46 @@ export function markInterruptResolved(
     resolvedIds.add(item);
     changed = true;
   }
-  if (changed) emit();
+  if (changed) {
+    persist();
+    emit();
+  }
+}
+
+// Persist the answered-id set per thread so a PAGE RELOAD mid-run does not lose it
+// and re-propose interrupts the operator already approved (they linger in
+// thread.interrupt until the whole parallel superstep resolves). Keyed by thread,
+// so switching threads loads the right set; cleared at the turn boundary.
+const STORAGE_PREFIX = "resolved-interrupts:";
+let currentStorageKey: string | null = null;
+
+function persist(): void {
+  if (typeof sessionStorage === "undefined" || !currentStorageKey) return;
+  try {
+    sessionStorage.setItem(currentStorageKey, JSON.stringify([...resolvedIds]));
+  } catch {
+    // sessionStorage unavailable (private mode / quota) -> in-memory only.
+  }
+}
+
+/** Point the resolved set at a thread, hydrating ids answered before a reload. */
+export function setResolvedInterruptsThread(
+  threadId: string | null | undefined,
+): void {
+  const key = threadId ? STORAGE_PREFIX + threadId : null;
+  if (key === currentStorageKey) return;
+  currentStorageKey = key;
+  resolvedIds.clear();
+  answeredResumeDecisions.clear();
+  if (key && typeof sessionStorage !== "undefined") {
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (raw) for (const id of JSON.parse(raw) as string[]) resolvedIds.add(id);
+    } catch {
+      // ignore malformed storage
+    }
+  }
+  emit();
 }
 
 export function isInterruptResolved(
@@ -122,8 +180,16 @@ export function isInterruptResolved(
   return ids.some((item) => !!item && resolvedIds.has(item));
 }
 
-/** Forget all answered ids (e.g. when switching to a different thread). */
+/** Forget all answered ids + accumulated resume decisions (new turn / thread). */
 export function clearResolvedInterrupts(): void {
+  answeredResumeDecisions.clear();
+  if (currentStorageKey && typeof sessionStorage !== "undefined") {
+    try {
+      sessionStorage.removeItem(currentStorageKey);
+    } catch {
+      // ignore
+    }
+  }
   if (resolvedIds.size === 0) return;
   resolvedIds.clear();
   emit();

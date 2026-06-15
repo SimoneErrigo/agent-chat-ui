@@ -181,7 +181,6 @@ export function ThreadActionsView({
 
       // Key the resume by interrupt id; required when multiple interrupts are pending.
       stream.submit(null, {
-        multitaskStrategy: "interrupt",
         command: {
           resume: interrupt.id
             ? { [interrupt.id]: { decisions: allDecisions } }
@@ -233,7 +232,6 @@ export function ThreadActionsView({
 
       // Key the resume by interrupt id; required when multiple interrupts are pending.
       stream.submit(null, {
-        multitaskStrategy: "interrupt",
         command: {
           resume: interrupt.id
             ? { [interrupt.id]: { decisions: allDecisions } }

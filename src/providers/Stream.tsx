@@ -23,7 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { ArrowRight } from "lucide-react";
 import { PasswordInput } from "@/components/ui/password-input";
 import { getApiKey } from "@/lib/api-key";
-import { clearResolvedInterrupts } from "@/lib/resolved-interrupts";
+import { setResolvedInterruptsThread } from "@/lib/resolved-interrupts";
 import { useThreads } from "./Thread";
 import { toast } from "sonner";
 
@@ -85,11 +85,13 @@ const StreamSession = ({
   const [threadId, setThreadId] = useQueryState("threadId");
   const { getThreads, setThreads } = useThreads();
 
-  // Forget locally-suppressed interrupts when switching threads, so an
-  // interrupt that becomes pending again (e.g. branch switch / regenerate)
-  // is not hidden by a stale "already answered" flag.
+  // Point the answered-interrupt set at the current thread, hydrating any ids
+  // approved BEFORE a page reload from sessionStorage. Without this a reload
+  // forgets the answered set and re-proposes HITL boxes the operator already
+  // approved (they linger in thread.interrupt until the whole parallel superstep
+  // resolves). Switching threads loads that thread's own set.
   useEffect(() => {
-    clearResolvedInterrupts();
+    setResolvedInterruptsThread(threadId);
   }, [threadId]);
 
   const streamValue = useTypedStream({
@@ -103,6 +105,10 @@ const StreamSession = ({
     }),
     threadId: threadId ?? null,
     fetchStateHistory: true,
+    // Re-join a still-running run's event stream after a page reload, so the UI
+    // shows the agent's live progress (and surfaces pending HITLs) instead of
+    // looking stuck while the run continues on the server.
+    reconnectOnMount: true,
     onCustomEvent: (event, options) => {
       if (isUIMessage(event) || isRemoveUIMessage(event)) {
         options.mutate((prev) => {

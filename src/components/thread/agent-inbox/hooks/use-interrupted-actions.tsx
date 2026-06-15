@@ -16,6 +16,8 @@ import { buildDecisionFromState, createDefaultHumanResponse } from "../utils";
 import {
   getInterruptKeys,
   markInterruptResolved,
+  recordResumeDecision,
+  getAllResumeDecisions,
 } from "@/lib/resolved-interrupts";
 
 interface UseInterruptedActionsInput {
@@ -91,14 +93,15 @@ export default function useInterruptedActions({
   const resumeRun = (decisions: Decision[]): boolean => {
     try {
       // Key the resume by interrupt id; required when multiple interrupts are pending.
-      thread.submit(null, {
-        multitaskStrategy: "interrupt",
-        command: {
-          resume: interrupt.id
-            ? { [interrupt.id]: { decisions } }
-            : { decisions },
-        },
-      });
+      // Accumulate this decision and resend the FULL answered-decision map every
+      // time, so the backend never re-fires another already-answered parallel
+      // interrupt from the shared checkpoint (which made an accepted box reappear).
+      if (interrupt.id) {
+        recordResumeDecision(interrupt.id, { decisions });
+        thread.submit(null, { command: { resume: getAllResumeDecisions() } });
+      } else {
+        thread.submit(null, { command: { resume: { decisions } } });
+      }
       return true;
     } catch (error) {
       console.error("Error sending human response", error);

@@ -3,7 +3,7 @@
 # Usage:
 #   ./rollout.sh            # use the moving dev tag
 #   ./rollout.sh <sha|tag>  # use an explicit tag, e.g. sha-1a2b3c4 or dev
-#   PULL_POLICY=Always ./rollout.sh  # force pulling the registry tag
+#   PULL_POLICY=IfNotPresent ./rollout.sh  # reuse a local image intentionally
 set -euo pipefail
 
 NS=ctf-ad-agents
@@ -21,7 +21,7 @@ else
   TAG="dev"
 fi
 
-PULL_POLICY="${PULL_POLICY:-IfNotPresent}"
+PULL_POLICY="${PULL_POLICY:-Always}"
 
 IMAGE="$OWNER/$APP:$TAG"
 
