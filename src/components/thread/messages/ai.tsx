@@ -117,6 +117,13 @@ function Interrupt({
   // there is no single id to watch.
   useResolvedInterruptsVersion();
 
+  // The "waiting for the agent to resume…" notice only makes sense while a run
+  // is actually streaming. When the run is idle/finished, a resolved interrupt
+  // still lingering in thread.interrupt is stale — there is no agent to resume —
+  // so showing a perpetual spinner is wrong (e.g. after a reload of a completed
+  // run). Gate the notice on the live-stream flag.
+  const { isLoading } = useStreamContext();
+
   // thread.interrupt is a single Interrupt when one is pending, but an ARRAY
   // when several sub-agents interrupt at once. Normalize to a list either way.
   const interruptList: Record<string, any>[] = Array.isArray(interrupt)
@@ -160,7 +167,7 @@ function Interrupt({
   return (
     <>
       {pendingView}
-      {awaitingBackend.length > 0 && (
+      {isLoading && awaitingBackend.length > 0 && (
         <AwaitingResumeNotice interrupts={awaitingBackend} />
       )}
     </>

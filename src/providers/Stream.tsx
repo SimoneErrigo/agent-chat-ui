@@ -104,11 +104,15 @@ const StreamSession = ({
       },
     }),
     threadId: threadId ?? null,
+    // Load the thread's persisted state on mount so a reload shows the TRUE latest
+    // checkpoint: the final synthesis when the run is done, or the pending HITL
+    // card when mid-run. We deliberately do NOT set `reconnectOnMount`: rejoining
+    // a run that ended at an interrupt replays stale values (carrying
+    // `__interrupt__` + pre-synthesis messages) which, via `stream.values ??
+    // historyValues`, SHADOW the completed history — leaving the UI stuck on
+    // "waiting for the agent to resume…" with the final answer missing after a
+    // reload of a finished run. History-only load always reflects the real state.
     fetchStateHistory: true,
-    // Re-join a still-running run's event stream after a page reload, so the UI
-    // shows the agent's live progress (and surfaces pending HITLs) instead of
-    // looking stuck while the run continues on the server.
-    reconnectOnMount: true,
     onCustomEvent: (event, options) => {
       if (isUIMessage(event) || isRemoveUIMessage(event)) {
         options.mutate((prev) => {
