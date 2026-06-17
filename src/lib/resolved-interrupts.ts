@@ -165,7 +165,8 @@ export function setResolvedInterruptsThread(
   if (key && typeof sessionStorage !== "undefined") {
     try {
       const raw = sessionStorage.getItem(key);
-      if (raw) for (const id of JSON.parse(raw) as string[]) resolvedIds.add(id);
+      if (raw)
+        for (const id of JSON.parse(raw) as string[]) resolvedIds.add(id);
     } catch {
       // ignore malformed storage
     }
