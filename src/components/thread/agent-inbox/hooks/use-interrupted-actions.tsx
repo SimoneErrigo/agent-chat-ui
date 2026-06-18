@@ -92,15 +92,30 @@ export default function useInterruptedActions({
 
   const resumeRun = (decisions: Decision[]): boolean => {
     try {
+      // The specialists are subgraph nodes, so the resumed run must carry the
+      // SAME stream options as a fresh turn (thread/index.tsx handleSubmit) --
+      // above all `streamSubgraphs: true`. Without it the post-HITL continuation
+      // runs inside a subgraph that is NOT streamed, so the next specialist's
+      // work never appears in the UI after an approval.
       // Key the resume by interrupt id; required when multiple interrupts are pending.
       // Accumulate this decision and resend the FULL answered-decision map every
       // time, so the backend never re-fires another already-answered parallel
       // interrupt from the shared checkpoint (which made an accepted box reappear).
       if (interrupt.id) {
         recordResumeDecision(interrupt.id, { decisions });
-        thread.submit(null, { command: { resume: getAllResumeDecisions() } });
+        thread.submit(null, {
+          command: { resume: getAllResumeDecisions() },
+          streamMode: ["values"],
+          streamSubgraphs: true,
+          streamResumable: true,
+        });
       } else {
-        thread.submit(null, { command: { resume: { decisions } } });
+        thread.submit(null, {
+          command: { resume: { decisions } },
+          streamMode: ["values"],
+          streamSubgraphs: true,
+          streamResumable: true,
+        });
       }
       return true;
     } catch (error) {
