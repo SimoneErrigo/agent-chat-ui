@@ -15,8 +15,10 @@ import { isAgentInboxInterruptSchema } from "@/lib/agent-inbox-interrupt";
 import {
   getInterruptKeys,
   isInterruptResolved,
+  takePendingResume,
   useResolvedInterruptsVersion,
 } from "@/lib/resolved-interrupts";
+import { useEffect } from "react";
 import { ThreadView } from "../agent-inbox";
 import { useQueryState, parseAsBoolean } from "nuqs";
 import { GenericInterruptView } from "./generic-interrupt";
@@ -122,7 +124,8 @@ function Interrupt({
   // still lingering in thread.interrupt is stale — there is no agent to resume —
   // so showing a perpetual spinner is wrong (e.g. after a reload of a completed
   // run). Gate the notice on the live-stream flag.
-  const { isLoading } = useStreamContext();
+  const stream = useStreamContext();
+  const { isLoading } = stream;
 
   // thread.interrupt is a single Interrupt when one is pending, but an ARRAY
   // when several sub-agents interrupt at once. Normalize to a list either way.
@@ -148,6 +151,31 @@ function Interrupt({
       pending.push(it);
     }
   }
+
+  // Centralized, DEFERRED resume. The per-interrupt action handlers only RECORD
+  // their decision (recordResumeDecision) and mark the box resolved; the actual
+  // Command(resume=…) is fired here, exactly once, and only after EVERY currently
+  // pending gate in this wave has been answered (pending empty, interrupts still
+  // present). Submitting per-approval instead re-runs the not-yet-answered sibling
+  // Send tasks — whose interrupt id is derived from the superstep they run at, so it
+  // SHIFTS — and the later approval (keyed by the stale id) then matches nothing and
+  // its gated tool never fires (the "drop rules never created" symptom). Resuming the
+  // whole wave in one invocation is the path the backend handles cleanly (verified:
+  // a 3-interrupt single-shot resume succeeds). takePendingResume() is idempotent, so
+  // re-renders / a resolved box lingering in thread.interrupt never double-submit, and
+  // only the active (last-message) instance owns the submit.
+  const isActiveInterruptView = isLastMessage || hasNoAIOrToolMessages;
+  const waveFullyAnswered = interruptList.length > 0 && pending.length === 0;
+  useEffect(() => {
+    if (!isActiveInterruptView || !waveFullyAnswered) return;
+    const resume = takePendingResume();
+    if (!resume) return;
+    stream.submit(null, {
+      command: { resume },
+      streamMode: ["values"],
+      streamSubgraphs: true,
+    });
+  }, [isActiveInterruptView, waveFullyAnswered, stream]);
 
   if (!(isLastMessage || hasNoAIOrToolMessages)) return null;
   if (interruptList.length === 0) return null;

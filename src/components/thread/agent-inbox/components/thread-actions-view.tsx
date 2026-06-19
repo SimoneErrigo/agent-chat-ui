@@ -13,6 +13,7 @@ import { useStreamContext } from "@/providers/Stream";
 import {
   getInterruptKeys,
   markInterruptResolved,
+  recordResumeDecision,
 } from "@/lib/resolved-interrupts";
 
 interface ThreadActionsViewProps {
@@ -179,14 +180,20 @@ export function ThreadActionsView({
         type: "approve",
       }));
 
-      // Key the resume by interrupt id; required when multiple interrupts are pending.
-      stream.submit(null, {
-        command: {
-          resume: interrupt.id
-            ? { [interrupt.id]: { decisions: allDecisions } }
-            : { decisions: allDecisions },
-        },
-      });
+      // Record this interrupt's decisions and let the central deferred submit in
+      // <Interrupt> (ai.tsx) fire ONE resume once the whole wave is answered, so a
+      // sibling specialist's still-pending gate is not re-run (and its interrupt id
+      // not shifted) by an early per-interrupt submit. Legacy backends without an
+      // interrupt id can only have one interrupt pending, so submit directly.
+      if (interrupt.id) {
+        recordResumeDecision(interrupt.id, { decisions: allDecisions });
+      } else {
+        stream.submit(null, {
+          command: { resume: { decisions: allDecisions } },
+          streamMode: ["values"],
+          streamSubgraphs: true,
+        });
+      }
 
       // Hide this HITL box immediately: with other agents still streaming,
       // thread.interrupt clears late and the answered box would linger.
@@ -230,14 +237,17 @@ export function ThreadActionsView({
         return decision;
       });
 
-      // Key the resume by interrupt id; required when multiple interrupts are pending.
-      stream.submit(null, {
-        command: {
-          resume: interrupt.id
-            ? { [interrupt.id]: { decisions: allDecisions } }
-            : { decisions: allDecisions },
-        },
-      });
+      // Record + defer to the central submit (see handleApproveAll / ai.tsx) so a
+      // mixed wave of specialist gates resumes in one invocation rather than per box.
+      if (interrupt.id) {
+        recordResumeDecision(interrupt.id, { decisions: allDecisions });
+      } else {
+        stream.submit(null, {
+          command: { resume: { decisions: allDecisions } },
+          streamMode: ["values"],
+          streamSubgraphs: true,
+        });
+      }
 
       markInterruptResolved(getInterruptKeys(interrupt));
 

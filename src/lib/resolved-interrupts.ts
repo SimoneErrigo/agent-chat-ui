@@ -38,6 +38,31 @@ export function getAllResumeDecisions(): Record<string, unknown> {
   return Object.fromEntries(answeredResumeDecisions);
 }
 
+// Signatures (sorted answered-id sets) already sent to the backend this turn.
+// Submission is deferred until EVERY currently-pending interrupt has been
+// answered, then fired ONCE with the full accumulated map (see <Interrupt> in
+// ai.tsx). Submitting earlier — on each individual approval — re-runs the
+// not-yet-answered sibling tasks; because a Send task's interrupt id is derived
+// from the superstep it runs at, the sibling's id then SHIFTS and the later
+// approval (keyed by the stale id) no longer matches, so its gated tool never
+// fires. Batching per wave keeps every gate on one invocation, which the
+// backend resumes cleanly (matches the multi-interrupt single-shot resume).
+const submittedResumeSignatures = new Set<string>();
+
+/**
+ * Returns the full accumulated id->decisions map to resume with, but only ONCE
+ * per distinct answered-id set: repeat calls for the same set (re-renders, or a
+ * resolved interrupt lingering in thread.interrupt) return null so we never
+ * double-submit. Returns null when nothing has been answered yet.
+ */
+export function takePendingResume(): Record<string, unknown> | null {
+  const map = Object.fromEntries(answeredResumeDecisions);
+  const signature = Object.keys(map).sort().join("|");
+  if (!signature || submittedResumeSignatures.has(signature)) return null;
+  submittedResumeSignatures.add(signature);
+  return map;
+}
+
 /** JSON.stringify with sorted object keys, so the same payload always yields the same string. */
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") {
@@ -162,6 +187,7 @@ export function setResolvedInterruptsThread(
   currentStorageKey = key;
   resolvedIds.clear();
   answeredResumeDecisions.clear();
+  submittedResumeSignatures.clear();
   if (key && typeof sessionStorage !== "undefined") {
     try {
       const raw = sessionStorage.getItem(key);
@@ -184,6 +210,7 @@ export function isInterruptResolved(
 /** Forget all answered ids + accumulated resume decisions (new turn / thread). */
 export function clearResolvedInterrupts(): void {
   answeredResumeDecisions.clear();
+  submittedResumeSignatures.clear();
   if (currentStorageKey && typeof sessionStorage !== "undefined") {
     try {
       sessionStorage.removeItem(currentStorageKey);
