@@ -92,11 +92,14 @@ export default function useInterruptedActions({
 
   const resumeRun = (decisions: Decision[]): boolean => {
     try {
-      // The specialists are subgraph nodes, so the resumed run must carry the
-      // SAME stream options as a fresh turn (thread/index.tsx handleSubmit) --
-      // above all `streamSubgraphs: true`. Without it the post-HITL continuation
-      // runs inside a subgraph that is NOT streamed, so the next specialist's
-      // work never appears in the UI after an approval.
+      // The specialists are subgraph nodes, so the resumed run must stream with
+      // `streamSubgraphs: true` (like a fresh turn in thread/index.tsx) -- without
+      // it the post-HITL continuation runs inside a subgraph that is NOT streamed,
+      // so the resumed agents' work never appears in the UI after an approval.
+      // We deliberately do NOT set `streamResumable` here: on a resume it lets the
+      // SDK rejoin the run that ended at the interrupt and replay STALE values,
+      // which shadow the live values and freeze the UI on "waiting to resume…"
+      // (same hazard the Stream.tsx provider avoids by skipping reconnectOnMount).
       // Key the resume by interrupt id; required when multiple interrupts are pending.
       // Accumulate this decision and resend the FULL answered-decision map every
       // time, so the backend never re-fires another already-answered parallel
@@ -107,7 +110,6 @@ export default function useInterruptedActions({
           command: { resume: getAllResumeDecisions() },
           streamMode: ["values"],
           streamSubgraphs: true,
-          streamResumable: true,
         });
       } else {
         thread.submit(null, {
